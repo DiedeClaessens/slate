@@ -13,6 +13,19 @@ A personal iPad app for handwriting with the Apple Pencil on pages, PDFs and ima
 
 With a free Apple ID the app stops opening after 7 days. Press Run again to reinstall it. Your notes stay.
 
+## Automatic reinstall
+
+`scripts/reinstall-ipad.sh` rebuilds Slate and reinstalls it on the iPad, so the 7-day signature never runs out. When Slate's signing profile has less than two days left, the script removes it so Xcode fetches a new one. A launch agent runs the script every day at 13:00, or when the Mac wakes up if it was asleep then. It needs the Mac logged in, and the iPad on the cable or on the same Wi-Fi. For Wi-Fi, connect the iPad by cable once and tick "Connect via network" for it in Xcode under Window > Devices and Simulators. The log is in `~/Library/Logs/slate-reinstall.log`.
+
+Turn it on:
+
+```sh
+cp scripts/com.diedeclaessens.slate.reinstall.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.diedeclaessens.slate.reinstall.plist
+```
+
+Run it now with `launchctl kickstart gui/$(id -u)/com.diedeclaessens.slate.reinstall`. Turn it off with `launchctl bootout gui/$(id -u)/com.diedeclaessens.slate.reinstall`.
+
 ## Where notes live
 
 In the Files app under On My iPad > Slate. Each note is a `.slate` folder with `note.json`, `drawing.data`, `thumbnail.png` and a `files` folder with its PDFs and images.
