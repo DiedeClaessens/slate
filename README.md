@@ -1,5 +1,24 @@
 <img src="assets/icon.svg" width="64" height="64" alt="">
 
-# Notes
+# Slate
 
-Created in [T3 Code](https://t3.codes).
+A personal iPad app for handwriting with the Apple Pencil on pages, PDFs and images. See [docs/design.md](docs/design.md) for what it does and the build order.
+
+## Run it on your iPad
+
+1. Connect the iPad with a cable and open `Slate.xcodeproj` in Xcode.
+2. On the iPad, turn on Settings > Privacy & Security > Developer Mode (it appears after the first connection) and restart.
+3. Pick the iPad as the run destination and press Run. Signing uses your free Personal Team.
+4. The first time, trust the developer on the iPad: Settings > General > VPN & Device Management.
+
+With a free Apple ID the app stops opening after 7 days. Press Run again to reinstall it. Your notes stay.
+
+## Where notes live
+
+In the Files app under On My iPad > Slate. Each note is a `.slate` folder with `note.json`, `drawing.data`, `thumbnail.png` and a `files` folder with its PDFs and images.
+
+## Tests
+
+```sh
+xcodebuild test -project Slate.xcodeproj -scheme Slate -destination 'platform=iOS Simulator,name=iPad Pro 11-inch (M5)'
+```
