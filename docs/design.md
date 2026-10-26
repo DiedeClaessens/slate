@@ -27,6 +27,7 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 - Only the Pencil draws. The finger scrolls, zooms and moves objects.
 - Apple's tool picker (pens, colors, eraser, lasso, ruler, undo) plus custom buttons for text, text size, handwriting to text, background, photo, PDF or image, pages, add page and export.
 - The eraser removes ink only, never text boxes, images or PDF content.
+- Apple's lasso selects handwriting. Drag the selection to move it, or tap it for cut, copy, delete, duplicate and copy as text.
 - Double-tap and squeeze on the Pencil follow Apple's tool picker behavior.
 
 ## Text
@@ -37,6 +38,7 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 - The text takes the pen color picked in the tool picker. Like ink, black text shows white on a black note.
 - Text boxes sit above the ink. Outside text mode, tap a text box with a finger to select it, drag it to move it, or tap the cross to delete it.
 - The handwriting button turns ink into text. Circle the handwriting with the Pencil and it becomes a text box in the same spot and color. Recognition is English only and runs on the device.
+- A text box made from handwriting keeps that handwriting. Select it and tap the arrow next to the cross to turn it back into the handwriting, at the place the box is now. This works any time, also after reopening the note.
 
 ## Images and PDFs
 

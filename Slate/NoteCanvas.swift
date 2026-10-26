@@ -66,6 +66,7 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         loopLayer.lineDashPattern = [6, 4]
         objects.imagesChanged = { [model] in model.meta.images = $0 }
         objects.textsChanged = { [model] texts, typing in typing ? model.typed(texts) : (model.meta.texts = texts) }
+        objects.revertRequested = { [model] in model.revertToHandwriting($0) }
         objects.editingBegan = { [unowned self] size in
             textSize = size
             model.textSize = size
@@ -276,6 +277,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
     var imagesChanged: (([ImageItem]) -> Void)?
     /// `typing` is true while a text box is being edited, so the note saves a moment later instead of on every key.
     var textsChanged: ((_ texts: [TextItem], _ typing: Bool) -> Void)?
+    var revertRequested: ((Int) -> Void)?
     var editingBegan: ((TextSize) -> Void)?
     var editingEnded: (() -> Void)?
     /// Holds the text boxes. It is not scaled but laid out at the zoom, so text stays sharp.
@@ -380,6 +382,8 @@ final class ObjectsView: UIView, UITextViewDelegate {
                 texts.remove(at: index)
                 textsChanged?(texts, false)
             }
+        } else if case .text(let index) = selected, texts[index].handwriting != nil, selection.revertFrame.contains(convert(point, to: selection)) {
+            revertRequested?(index)
         } else if let index = texts.lastIndex(where: { $0.frame.contains(point) }) {
             selected = .text(index)
         } else {
@@ -492,7 +496,8 @@ final class ObjectsView: UIView, UITextViewDelegate {
         selection.isHidden = selected == nil
         guard let selected, let frame = frame(of: selected) else { return }
         selection.frame = frame
-        selection.layout(zoom: zoom, handle: selected.isImage)
+        let revertible = if case .text(let index) = selected { texts[index].handwriting != nil } else { false }
+        selection.layout(zoom: zoom, handle: selected.isImage, revert: revertible)
     }
 }
 
@@ -507,22 +512,28 @@ final class TextLayer: UIView {
 final class SelectionView: UIView {
     private let handle = UIView()
     private let delete = UIImageView(image: UIImage(systemName: "xmark.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 28)))
+    private let revert = UIImageView(image: UIImage(systemName: "arrow.uturn.backward.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 28)))
     var deleteFrame: CGRect { delete.frame }
+    var revertFrame: CGRect { revert.frame }
 
     init() {
         super.init(frame: .zero)
         layer.borderColor = tintColor.cgColor
         handle.backgroundColor = tintColor
         delete.contentMode = .center
+        revert.contentMode = .center
         addSubview(handle)
         addSubview(delete)
+        addSubview(revert)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     /// Keeps the border and controls the same size on screen at every zoom.
-    func layout(zoom: CGFloat, handle shown: Bool) {
+    /// `revert` shows the button that turns text made from handwriting back into handwriting.
+    func layout(zoom: CGFloat, handle shown: Bool, revert revertible: Bool) {
         handle.isHidden = !shown
+        revert.isHidden = !revertible
         layer.borderWidth = 2 / zoom
         let unzoom = CGAffineTransform(scaleX: 1 / zoom, y: 1 / zoom)
         handle.bounds.size = CGSize(width: 22, height: 22)
@@ -533,6 +544,9 @@ final class SelectionView: UIView {
         delete.transform = unzoom
         // Above the box, so text never covers it.
         delete.center = CGPoint(x: bounds.maxX - 22 / zoom, y: -24 / zoom)
+        revert.bounds.size = delete.bounds.size
+        revert.transform = unzoom
+        revert.center = CGPoint(x: bounds.maxX - 70 / zoom, y: -24 / zoom)
     }
 }
 

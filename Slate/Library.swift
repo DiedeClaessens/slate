@@ -82,6 +82,8 @@ struct TextItem: Codable, Equatable {
     var size: TextSize
     /// Red, green, blue and alpha in PencilKit's light style, like the ink.
     var color: [CGFloat]
+    /// The ink this text was recognized from, in PencilKit's data format, so it can turn back into handwriting.
+    var handwriting: Data?
 
     static let margin: CGFloat = 40
 

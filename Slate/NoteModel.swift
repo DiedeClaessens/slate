@@ -118,8 +118,21 @@ enum CanvasMode {
         let size = [TextSize.small, .medium, .large].min { abs($0.points - lineHeight * 0.75) < abs($1.points - lineHeight * 0.75) } ?? .medium
         drawing = PKDrawing(strokes: zip(drawing.strokes, inside).filter { !$0.1 }.map(\.0))
         drawingVersion += 1
-        meta.texts.append(TextItem(text: lines.joined(separator: "\n"), origin: bounds.origin, size: size, color: first.ink.color.components))
+        meta.texts.append(TextItem(
+            text: lines.joined(separator: "\n"), origin: bounds.origin, size: size, color: first.ink.color.components,
+            handwriting: PKDrawing(strokes: strokes).dataRepresentation()
+        ))
         return true
+    }
+
+    /// Replaces a text box made from handwriting with that handwriting again, where the box is now.
+    func revertToHandwriting(_ index: Int) {
+        let item = meta.texts[index]
+        guard let data = item.handwriting, let ink = try? PKDrawing(data: data) else { return }
+        let move = CGAffineTransform(translationX: item.origin.x - ink.bounds.minX, y: item.origin.y - ink.bounds.minY)
+        drawing = PKDrawing(strokes: drawing.strokes + ink.transformed(using: move).strokes)
+        drawingVersion += 1
+        meta.texts.remove(at: index)
     }
 
     /// Writes the whole note as a PDF to a temporary file named after the note.

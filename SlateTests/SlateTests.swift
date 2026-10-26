@@ -248,3 +248,18 @@ private func pixel(of image: CGImage, at point: CGPoint) -> [UInt8] {
     #expect(pixel(of: black, at: CGPoint(x: 10, y: 10)) == [0, 0, 0, 255])
     #expect(pixel(of: grid, at: CGPoint(x: 10, y: 10)) == [255, 255, 255, 255])
 }
+
+@Test func textMadeFromHandwritingTurnsBackIntoThatHandwritingWhereTheBoxIs() async throws {
+    let library = try emptyLibrary()
+    let url = try library.createNote(background: .grid, in: nil)
+    try NoteFile.save(NoteFile.meta(at: url), drawing: PKDrawing(strokes: outlines(of: "HELLO", at: CGPoint(x: 100, y: 300), size: 90)), to: url)
+    let model = NoteModel(url: url)
+    let before = model.drawing.bounds
+    #expect(await model.convertHandwriting(in: CGPath(rect: CGRect(x: 50, y: 150, width: 700, height: 250), transform: nil)))
+    model.meta.texts[0].origin.y += 500
+
+    model.revertToHandwriting(0)
+    #expect(model.meta.texts.isEmpty)
+    #expect(model.drawing.bounds.integral == before.offsetBy(dx: 0, dy: 500).integral)
+    #expect(NoteModel(url: url).drawing.strokes.count == model.drawing.strokes.count)
+}
