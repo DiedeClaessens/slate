@@ -129,9 +129,15 @@ enum NoteFile {
         return name
     }
 
+    /// Both files are written in full before either replaces the old one, so a full disk cannot leave new pages with old ink.
     static func save(_ meta: NoteMeta, drawing: PKDrawing, to url: URL) throws {
-        try JSONEncoder().encode(meta).write(to: url.appending(path: "note.json"), options: .atomic)
-        try drawing.dataRepresentation().write(to: url.appending(path: "drawing.data"), options: .atomic)
+        let parts = [("note.json", try JSONEncoder().encode(meta)), ("drawing.data", drawing.dataRepresentation())]
+        for (name, data) in parts {
+            try data.write(to: url.appending(path: "\(name).new"))
+        }
+        for (name, _) in parts where rename(url.appending(path: "\(name).new").path, url.appending(path: name).path) != 0 {
+            throw CocoaError(.fileWriteUnknown)
+        }
         let image = Page.image(of: drawing, page: 0, meta: meta, note: url, width: 200)
         try image.pngData()?.write(to: thumbnail(at: url), options: .atomic)
         let used = Set(meta.pdfPages.map(\.file) + meta.images.map(\.file))

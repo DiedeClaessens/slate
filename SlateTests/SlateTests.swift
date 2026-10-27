@@ -366,3 +366,20 @@ private func pixel(of image: CGImage, at point: CGPoint) -> [UInt8] {
     let screen = UIGraphicsImageRenderer(bounds: view.bounds).image { _ in view.drawHierarchy(in: view.bounds, afterScreenUpdates: false) }
     #expect(pixel(of: try #require(screen.cgImage), at: CGPoint(x: 100, y: 100)) == [255, 0, 0, 255])
 }
+
+@Test func aSaveThatCannotWriteTheInkKeepsTheOldPagesAndInk() throws {
+    let url = try emptyLibrary().createNote(background: .grid, in: nil)
+    let model = NoteModel(url: url)
+    model.addPage()
+    model.drawingChanged(PKDrawing(strokes: [line(atY: 100), line(atY: 1546)]))
+    model.save()
+    try FileManager.default.createDirectory(at: url.appending(path: "drawing.data.new"), withIntermediateDirectories: false)
+
+    model.rearrange([1])
+    model.save()
+
+    #expect(model.message != nil)
+    let reopened = NoteModel(url: url)
+    #expect(reopened.meta.pageCount == 2)
+    #expect(heights(reopened.drawing) == [100, 1546])
+}
