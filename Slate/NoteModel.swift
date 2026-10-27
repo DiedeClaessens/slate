@@ -46,13 +46,20 @@ enum CanvasMode {
         }
     }
 
+    /// Replaces the drawing from outside the canvas, so the canvas reloads it.
+    private func replaceDrawing(_ drawing: PKDrawing) {
+        self.drawing = drawing
+        drawingVersion += 1
+        saveSoon()
+    }
+
     /// Only writes when something changed, so opening a note to read it keeps its place on the home screen.
     func save() {
         guard let saveTask else { return }
         saveTask.cancel()
-        self.saveTask = nil
         do {
             try NoteFile.save(meta, drawing: drawing, to: url)
+            self.saveTask = nil
         } catch {
             message = "This note could not be saved: \(error.localizedDescription)"
         }
@@ -65,8 +72,7 @@ enum CanvasMode {
 
     /// See `PKDrawing.rearranged(_:)`.
     func rearrange(_ order: [Int]) {
-        drawing = drawing.rearranged(order)
-        drawingVersion += 1
+        replaceDrawing(drawing.rearranged(order))
         meta = meta.rearranged(order)
     }
 
@@ -83,8 +89,7 @@ enum CanvasMode {
         let order = Array(0..<at) + Array(repeating: -1, count: pdf.numberOfPages) + Array(at..<(empty ? 0 : meta.pageCount))
         var newMeta = meta.rearranged(order)
         newMeta.pdfPages += (0..<pdf.numberOfPages).map { PDFPageRef(page: at + $0, file: file, index: $0) }
-        drawing = drawing.rearranged(order)
-        drawingVersion += 1
+        replaceDrawing(drawing.rearranged(order))
         meta = newMeta
         scrollTarget = at
     }
@@ -117,8 +122,7 @@ enum CanvasMode {
         let bounds = PKDrawing(strokes: strokes).bounds
         let lineHeight = bounds.height / CGFloat(lines.count)
         let size = [TextSize.small, .medium, .large].min { abs($0.points - lineHeight * 0.75) < abs($1.points - lineHeight * 0.75) } ?? .medium
-        drawing = PKDrawing(strokes: zip(drawing.strokes, inside).filter { !$0.1 }.map(\.0))
-        drawingVersion += 1
+        replaceDrawing(PKDrawing(strokes: zip(drawing.strokes, inside).filter { !$0.1 }.map(\.0)))
         meta.texts.append(TextItem(
             text: lines.joined(separator: "\n"), origin: bounds.origin, size: size, color: first.ink.color.components,
             handwriting: PKDrawing(strokes: strokes).dataRepresentation()
@@ -131,8 +135,7 @@ enum CanvasMode {
         let item = meta.texts[index]
         guard let data = item.handwriting, let ink = try? PKDrawing(data: data) else { return }
         let move = CGAffineTransform(translationX: item.origin.x - ink.bounds.minX, y: item.origin.y - ink.bounds.minY)
-        drawing = PKDrawing(strokes: drawing.strokes + ink.transformed(using: move).strokes)
-        drawingVersion += 1
+        replaceDrawing(PKDrawing(strokes: drawing.strokes + ink.transformed(using: move).strokes))
         meta.texts.remove(at: index)
     }
 

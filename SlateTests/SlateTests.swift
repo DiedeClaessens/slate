@@ -45,11 +45,13 @@ private func emptyLibrary() throws -> Library {
     #expect(library.notes.map { "\($0.folder ?? "-") \($0.title)" } == ["School Maths"])
 
     _ = try Library(root: library.root).createNote(background: .grid, in: "School")
+    try Data("scan".utf8).write(to: library.root.appending(path: "School/scan.pdf"))
 
     try library.deleteFolder("School")
     #expect(library.folders == [])
     #expect(library.notes.map(\.folder) == [nil, nil])
     #expect(library.notes.map(\.title).contains("Maths"))
+    #expect(try String(contentsOf: library.root.appending(path: "scan.pdf"), encoding: .utf8) == "scan")
 }
 
 @Test func aFolderNameCannotLeaveTheLibrary() throws {

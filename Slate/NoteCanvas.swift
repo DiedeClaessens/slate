@@ -319,7 +319,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
             for ref in pdfPages {
                 let document = documents[ref.file] ?? CGPDFDocument(NoteFile.file(ref.file, in: note) as CFURL)
                 documents[ref.file] = document
-                guard let pdf = document?.page(at: ref.index + 1) else { continue }
+                guard let pdf = PDFPageView.lock.withLock({ document?.page(at: ref.index + 1) }) else { continue }
                 insertSubview(PDFPageView(pdf: pdf, frame: Page.rect(ref.page)), at: 0)
             }
         }
@@ -561,6 +561,8 @@ final class SelectionView: UIView {
 
 /// Draws its PDF page in tiles, so it stays sharp at every zoom.
 final class PDFPageView: UIView {
+    /// Tiles draw on background threads, and pages of one file share a document. One drawing at a time keeps that safe.
+    static let lock = NSLock()
     override class var layerClass: AnyClass { CATiledLayer.self }
     private let pdf: CGPDFPage
 
@@ -576,6 +578,6 @@ final class PDFPageView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
-        Page.draw(pdf, in: bounds, context: context)
+        Self.lock.withLock { Page.draw(pdf, in: bounds, context: context) }
     }
 }

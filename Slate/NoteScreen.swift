@@ -152,7 +152,7 @@ struct PageOverview: View {
                         }
                         .draggable(String(page))
                         .dropDestination(for: String.self) { items, _ in
-                            guard let from = items.first.flatMap({ Int($0) }), from != page else { return false }
+                            guard let from = items.first.flatMap({ Int($0) }), (0..<count).contains(from), from != page else { return false }
                             var order = Array(0..<count)
                             order.move(fromOffsets: [from], toOffset: page > from ? page + 1 : page)
                             model.rearrange(order)

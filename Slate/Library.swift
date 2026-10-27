@@ -239,12 +239,10 @@ struct NoteItem: Identifiable, Hashable {
         reload()
     }
 
-    /// Moves the folder's notes to the top level before removing it, so no note is lost.
-    /// It looks again first, because notes can be added in the Files app.
+    /// Moves everything in the folder to the top level before removing it, so no note or file is lost.
     func deleteFolder(_ name: String) throws {
-        reload()
-        for note in notes where note.folder == name {
-            try FileManager.default.moveItem(at: note.url, to: root.appending(path: note.url.lastPathComponent))
+        for item in try FileManager.default.contentsOfDirectory(at: directory(name), includingPropertiesForKeys: nil) {
+            try FileManager.default.moveItem(at: item, to: root.appending(path: item.lastPathComponent))
         }
         try FileManager.default.removeItem(at: directory(name))
         reload()

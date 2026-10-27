@@ -52,6 +52,7 @@ struct NotesGrid: View {
     @State private var prompt: Prompt?
     @State private var promptText = ""
     @State private var deleting: NoteItem?
+    @State private var failure: String?
 
     /// Searching from the top level looks through every folder.
     private var notes: [NoteItem] {
@@ -74,7 +75,7 @@ struct NotesGrid: View {
                         .contextMenu {
                             Button("Rename", systemImage: "pencil") { ask(.renameFolder(name), name) }
                             Button("Delete folder, keep notes", systemImage: "folder.badge.minus", role: .destructive) {
-                                try? library.deleteFolder(name)
+                                attempt { try library.deleteFolder(name) }
                             }
                         }
                     }
@@ -90,12 +91,12 @@ struct NotesGrid: View {
                     .contextMenu {
                         Button("Rename", systemImage: "pencil") { ask(.renameNote(note), note.title) }
                         Menu("Move to", systemImage: "folder") {
-                            Button("No folder") { try? library.move(note, to: nil) }.disabled(note.folder == nil)
+                            Button("No folder") { attempt { try library.move(note, to: nil) } }.disabled(note.folder == nil)
                             ForEach(library.folders, id: \.self) { name in
-                                Button(name) { try? library.move(note, to: name) }.disabled(note.folder == name)
+                                Button(name) { attempt { try library.move(note, to: name) } }.disabled(note.folder == name)
                             }
                         }
-                        Button("Duplicate", systemImage: "plus.square.on.square") { try? library.duplicate(note) }
+                        Button("Duplicate", systemImage: "plus.square.on.square") { attempt { try library.duplicate(note) } }
                         Button("Delete", systemImage: "trash", role: .destructive) { deleting = note }
                     }
                 }
@@ -119,13 +120,16 @@ struct NotesGrid: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { answer() }
         }
+        .alert("That didn't work", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {} message: {
+            Text(failure ?? "")
+        }
         .confirmationDialog(
             "Delete \"\(deleting?.title ?? "")\"?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
             titleVisibility: .visible
         ) {
             Button("Delete note", role: .destructive) {
-                if let deleting { try? library.delete(deleting) }
+                if let deleting { attempt { try library.delete(deleting) } }
             }
         }
     }
@@ -139,16 +143,18 @@ struct NotesGrid: View {
         let text = promptText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let prompt else { return }
         switch prompt {
-        case .newFolder: try? library.createFolder(text)
-        case .renameFolder(let name): try? library.renameFolder(name, to: text)
-        case .renameNote(let note): try? library.rename(note, to: text)
+        case .newFolder: attempt { try library.createFolder(text) }
+        case .renameFolder(let name): attempt { try library.renameFolder(name, to: text) }
+        case .renameNote(let note): attempt { try library.rename(note, to: text) }
         }
     }
 
+    private func attempt(_ action: () throws -> Void) {
+        do { try action() } catch { failure = error.localizedDescription }
+    }
+
     private func newNote(_ background: Background) {
-        if let url = try? library.createNote(background: background, in: folder) {
-            path.append(.note(url))
-        }
+        attempt { path.append(.note(try library.createNote(background: background, in: folder))) }
     }
 }
 
