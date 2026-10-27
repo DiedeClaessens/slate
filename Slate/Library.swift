@@ -155,6 +155,8 @@ struct NoteItem: Identifiable, Hashable {
     let root: URL
     private(set) var folders: [String] = []
     private(set) var notes: [NoteItem] = []
+    /// Shown as an alert over the home screen and the note on top of it.
+    var failure: String?
 
     init(root: URL = .documentsDirectory) {
         self.root = root

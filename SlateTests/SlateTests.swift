@@ -336,3 +336,19 @@ private func pixel(of image: CGImage, at point: CGPoint) -> [UInt8] {
     objects.textLayer.endEditing(true)
     #expect(meta.texts.isEmpty)
 }
+
+@Test func aPDFPageOnScreenDrawsItsContent() async throws {
+    let window = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.keyWindow)
+    let red = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 200, height: 200)).pdfData { context in
+        context.beginPage()
+        UIColor.red.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+    }
+    let page = try #require(CGPDFDocument(CGDataProvider(data: red as CFData)!)?.page(at: 1))
+    let view = PDFPageView(pdf: page, frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+    window.addSubview(view)
+    defer { view.removeFromSuperview() }
+    try await Task.sleep(for: .seconds(2))
+    let screen = UIGraphicsImageRenderer(bounds: view.bounds).image { _ in view.drawHierarchy(in: view.bounds, afterScreenUpdates: false) }
+    #expect(pixel(of: try #require(screen.cgImage), at: CGPoint(x: 100, y: 100)) == [255, 0, 0, 255])
+}

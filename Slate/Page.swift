@@ -39,7 +39,7 @@ enum Page {
     }
 
     /// Draws the PDF page as large as fits, centered in `rect`. `context` has UIKit's flipped coordinates.
-    static func draw(_ pdf: CGPDFPage, in rect: CGRect, context: CGContext) {
+    nonisolated static func draw(_ pdf: CGPDFPage, in rect: CGRect, context: CGContext) {
         let box = pdf.getBoxRect(.cropBox)
         let turned = pdf.rotationAngle % 180 != 0
         let source = CGRect(origin: .zero, size: turned ? CGSize(width: box.height, height: box.width) : box.size)

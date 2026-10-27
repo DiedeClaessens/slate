@@ -18,6 +18,7 @@ enum Route: Hashable {
 
 struct LibraryView: View {
     @State private var path: [Route] = []
+    @Environment(Library.self) private var library
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -28,6 +29,9 @@ struct LibraryView: View {
                     case .note(let url): NoteScreen(url: url)
                     }
                 }
+        }
+        .alert("That didn't work", isPresented: Binding(get: { library.failure != nil }, set: { if !$0 { library.failure = nil } })) {} message: {
+            Text(library.failure ?? "")
         }
     }
 }
@@ -52,7 +56,6 @@ struct NotesGrid: View {
     @State private var prompt: Prompt?
     @State private var promptText = ""
     @State private var deleting: NoteItem?
-    @State private var failure: String?
 
     /// Searching from the top level looks through every folder.
     private var notes: [NoteItem] {
@@ -120,9 +123,6 @@ struct NotesGrid: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") { answer() }
         }
-        .alert("That didn't work", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {} message: {
-            Text(failure ?? "")
-        }
         .confirmationDialog(
             "Delete \"\(deleting?.title ?? "")\"?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
@@ -150,7 +150,7 @@ struct NotesGrid: View {
     }
 
     private func attempt(_ action: () throws -> Void) {
-        do { try action() } catch { failure = error.localizedDescription }
+        do { try action() } catch { library.failure = error.localizedDescription }
     }
 
     private func newNote(_ background: Background) {

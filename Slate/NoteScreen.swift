@@ -86,6 +86,7 @@ struct NoteScreen: View {
             }
             .onDisappear {
                 model.save()
+                if let message = model.message { library.failure = message }
                 library.reload()
             }
     }

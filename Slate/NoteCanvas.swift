@@ -560,14 +560,17 @@ final class SelectionView: UIView {
 }
 
 /// Draws its PDF page in tiles, so it stays sharp at every zoom.
+/// Tiles draw on background threads, so drawing stays off the main actor and only reads what never changes.
 final class PDFPageView: UIView {
-    /// Tiles draw on background threads, and pages of one file share a document. One drawing at a time keeps that safe.
-    static let lock = NSLock()
+    /// Pages of one file share a document. One drawing at a time keeps that safe.
+    nonisolated static let lock = NSLock()
     override class var layerClass: AnyClass { CATiledLayer.self }
-    private let pdf: CGPDFPage
+    nonisolated(unsafe) private let pdf: CGPDFPage
+    nonisolated private let size: CGSize
 
     init(pdf: CGPDFPage, frame: CGRect) {
         self.pdf = pdf
+        size = frame.size
         super.init(frame: frame)
         backgroundColor = .white
         isUserInteractionEnabled = false
@@ -576,8 +579,8 @@ final class PDFPageView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override func draw(_ rect: CGRect) {
+    nonisolated override func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
-        Self.lock.withLock { Page.draw(pdf, in: bounds, context: context) }
+        Self.lock.withLock { Page.draw(pdf, in: CGRect(origin: .zero, size: size), context: context) }
     }
 }
