@@ -65,7 +65,7 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         loopLayer.lineWidth = 2
         loopLayer.lineDashPattern = [6, 4]
         objects.imagesChanged = { [model] in model.meta.images = $0 }
-        objects.textsChanged = { [model] texts, typing in typing ? model.typed(texts) : (model.meta.texts = texts) }
+        objects.textsChanged = { [model] in model.meta.texts = $0 }
         objects.revertRequested = { [model] in model.revertToHandwriting($0) }
         objects.editingBegan = { [unowned self] size in
             textSize = size
@@ -195,7 +195,7 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
             let path = loopPath
             Task {
                 if await !model.convertHandwriting(in: path) {
-                    model.message = "No handwriting was recognized inside the circle."
+                    model.message = "The circled ink could not be turned into text."
                 }
                 loopLayer.path = nil
                 model.mode = .draw
@@ -275,8 +275,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
     }
 
     var imagesChanged: (([ImageItem]) -> Void)?
-    /// `typing` is true while a text box is being edited, so the note saves a moment later instead of on every key.
-    var textsChanged: ((_ texts: [TextItem], _ typing: Bool) -> Void)?
+    var textsChanged: (([TextItem]) -> Void)?
     var revertRequested: ((Int) -> Void)?
     var editingBegan: ((TextSize) -> Void)?
     var editingEnded: (() -> Void)?
@@ -375,12 +374,13 @@ final class ObjectsView: UIView, UITextViewDelegate {
         if let selected, selection.deleteFrame.contains(convert(point, to: selection)) {
             switch selected {
             case .image(let index):
-                images?.remove(at: index)
-                images.map { imagesChanged?($0) }
+                var images = images ?? []
+                images.remove(at: index)
+                imagesChanged?(images)
             case .text(let index):
                 var texts = texts
                 texts.remove(at: index)
-                textsChanged?(texts, false)
+                textsChanged?(texts)
             }
         } else if case .text(let index) = selected, texts[index].handwriting != nil, selection.revertFrame.contains(convert(point, to: selection)) {
             revertRequested?(index)
@@ -401,13 +401,14 @@ final class ObjectsView: UIView, UITextViewDelegate {
             textViews[index].becomeFirstResponder()
             return
         }
-        let page = Page.rect(Int(point.y / Page.stride))
+        let page = Page.rect(Page.index(at: point.y))
         let x = min(max(point.x, TextItem.margin), Page.size.width - TextItem.margin - size.points)
         let y = min(max(point.y - size.points * 0.6, page.minY), page.maxY - size.points * 1.2)
         texts.append(TextItem(text: "", origin: CGPoint(x: x, y: y), size: size, color: color.components))
         textViews.append(makeTextView())
         style(texts.count - 1, text: true)
         textViews[texts.count - 1].becomeFirstResponder()
+        textsChanged?(texts)
     }
 
     private func makeTextView() -> UITextView {
@@ -425,7 +426,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
         guard let index = textViews.firstIndex(where: \.isFirstResponder), texts[index].size != size else { return }
         texts[index].size = size
         style(index, text: false)
-        textsChanged?(texts, true)
+        textsChanged?(texts)
     }
 
     func textViewDidBeginEditing(_ view: UITextView) {
@@ -437,7 +438,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
         guard let index = textViews.firstIndex(of: view) else { return }
         texts[index].text = view.text
         place(index)
-        textsChanged?(texts, true)
+        textsChanged?(texts)
     }
 
     /// An empty text box is removed when you stop editing it.
@@ -447,7 +448,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
             texts.remove(at: index)
             textViews.remove(at: index).removeFromSuperview()
         }
-        textsChanged?(texts, false)
+        textsChanged?(texts)
         editingEnded?()
     }
 
@@ -478,18 +479,25 @@ final class ObjectsView: UIView, UITextViewDelegate {
             } else {
                 frame = frame.offsetBy(dx: delta.x, dy: delta.y)
             }
+            if done { frame.origin = inside(frame) }
             images?[index].frame = frame
             imageViews[index].frame = frame
             if done, let images { imagesChanged?(images) }
         case .text(let index):
             texts[index].origin.x += delta.x
             texts[index].origin.y += delta.y
+            if done { texts[index].origin = inside(texts[index].frame) }
             style(index, text: false)
-            if done { textsChanged?(texts, false) }
+            if done { textsChanged?(texts) }
         case nil:
             return
         }
         layoutSelection()
+    }
+
+    /// Where `frame` goes when it is dropped, so it stays on the note and moves along when pages are rearranged.
+    private func inside(_ frame: CGRect) -> CGPoint {
+        CGPoint(x: max(min(frame.minX, bounds.width - frame.width), 0), y: max(min(frame.minY, bounds.height - frame.height), 0))
     }
 
     private func layoutSelection() {

@@ -89,6 +89,7 @@ private func describe(_ meta: NoteMeta) -> [String] {
     #expect(model.meta.pageCount == 4)
     #expect(describe(model.meta) == ["page 1 pdf 0", "page 2 pdf 1"])
     #expect(heights(model.drawing) == [100, 3 * 1446 + 100])
+    model.save()
     #expect(describe(NoteModel(url: url).meta) == ["page 1 pdf 0", "page 2 pdf 1"])
 }
 
@@ -142,6 +143,7 @@ private func describe(_ meta: NoteMeta) -> [String] {
     #expect(FileManager.default.fileExists(atPath: file.path))
 
     model.meta.images = []
+    model.save()
     #expect(!FileManager.default.fileExists(atPath: file.path))
 }
 
@@ -197,6 +199,7 @@ private func stroke(through points: [CGPoint]) -> PKStroke {
     #expect(model.meta.texts.map(\.text) == ["HELLO"])
     #expect(model.meta.texts.map(\.size) == [.large])
     #expect(heights(model.drawing) == [1000])
+    model.save()
     #expect(NoteModel(url: url).meta.texts.map(\.text) == ["HELLO"])
 }
 
@@ -261,5 +264,45 @@ private func pixel(of image: CGImage, at point: CGPoint) -> [UInt8] {
     model.revertToHandwriting(0)
     #expect(model.meta.texts.isEmpty)
     #expect(model.drawing.bounds.integral == before.offsetBy(dx: 0, dy: 500).integral)
+    model.save()
     #expect(NoteModel(url: url).drawing.strokes.count == model.drawing.strokes.count)
+}
+
+@Test func aNoteWithOnlyTextKeepsItsTextWhenAPDFIsInserted() throws {
+    let model = NoteModel(url: try emptyLibrary().createNote(background: .grid, in: nil))
+    model.meta.texts = [TextItem(text: "Lecture 3", origin: CGPoint(x: 50, y: 50), size: .large, color: [0, 0, 0, 1])]
+    try model.insertPDF(pdf(pages: 1))
+    #expect(model.meta.pageCount == 2)
+    #expect(model.meta.texts.map(\.text) == ["Lecture 3"])
+}
+
+@Test func deletingTheSelectedImageRemovesItFromTheScreen() {
+    let objects = ObjectsView()
+    let note = FileManager.default.temporaryDirectory
+    var meta = NoteMeta(title: "", background: .grid, pageCount: 1)
+    meta.images = [ImageItem(file: "a.heic", frame: CGRect(x: 100, y: 100, width: 200, height: 200))]
+    objects.imagesChanged = { meta.images = $0 }
+    objects.update(meta: meta, note: note, zoom: 1, mode: .draw)
+    objects.tapped(at: CGPoint(x: 150, y: 150))
+    objects.tapped(at: CGPoint(x: 278, y: 76))
+    objects.update(meta: meta, note: note, zoom: 1, mode: .draw)
+    #expect(meta.images.isEmpty)
+    #expect(objects.subviews.filter { $0 is UIImageView }.isEmpty)
+}
+
+@Test func aNewTextBoxSurvivesAddingAPageBeforeAnythingIsTyped() throws {
+    let window = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.keyWindow)
+    let objects = ObjectsView()
+    window.addSubview(objects.textLayer)
+    defer { objects.textLayer.removeFromSuperview() }
+    let note = FileManager.default.temporaryDirectory
+    var meta = NoteMeta(title: "", background: .grid, pageCount: 1)
+    objects.textsChanged = { meta.texts = $0 }
+    objects.update(meta: meta, note: note, zoom: 1, mode: .text)
+    objects.editText(at: CGPoint(x: 100, y: 100), size: .medium, color: .black)
+    meta.pageCount = 2
+    objects.update(meta: meta, note: note, zoom: 1, mode: .text)
+    #expect(objects.editing)
+    objects.textLayer.endEditing(true)
+    #expect(meta.texts.isEmpty)
 }

@@ -13,12 +13,11 @@ enum CanvasMode {
 
 @Observable final class NoteModel {
     let url: URL
-    var meta: NoteMeta { didSet { typing ? saveSoon() : save() } }
+    var meta: NoteMeta { didSet { saveSoon() } }
     var mode = CanvasMode.draw
     var textSize = TextSize.medium
     /// Shown to the user as an alert.
     var message: String?
-    @ObservationIgnored private var typing = false
     private(set) var drawing: PKDrawing
     /// Goes up when the drawing is replaced from outside the canvas, so the canvas reloads it.
     private(set) var drawingVersion = 0
@@ -38,13 +37,7 @@ enum CanvasMode {
         saveSoon()
     }
 
-    /// Saves a second after the last keystroke instead of on every one.
-    func typed(_ texts: [TextItem]) {
-        typing = true
-        meta.texts = texts
-        typing = false
-    }
-
+    /// Saves a second after the last change instead of on every one. Leaving the note or the app saves straight away.
     private func saveSoon() {
         saveTask?.cancel()
         saveTask = Task {
@@ -55,7 +48,11 @@ enum CanvasMode {
 
     func save() {
         saveTask?.cancel()
-        try? NoteFile.save(meta, drawing: drawing, to: url)
+        do {
+            try NoteFile.save(meta, drawing: drawing, to: url)
+        } catch {
+            message = "This note could not be saved: \(error.localizedDescription)"
+        }
     }
 
     func addPage() {
@@ -70,7 +67,7 @@ enum CanvasMode {
         meta = meta.rearranged(order)
     }
 
-    var currentPage: Int { min(max(Int(visibleCenter.y / Page.stride), 0), meta.pageCount - 1) }
+    var currentPage: Int { min(max(Page.index(at: visibleCenter.y), 0), meta.pageCount - 1) }
 
     /// Inserts the PDF's pages after the current page. In a note that is still one empty page, they replace it.
     func insertPDF(_ data: Data) throws {
@@ -78,7 +75,7 @@ enum CanvasMode {
             throw CocoaError(.fileReadCorruptFile)
         }
         let file = try NoteFile.store(data, ext: "pdf", in: url)
-        let empty = meta.pageCount == 1 && drawing.strokes.isEmpty && meta.images.isEmpty && meta.pdfPages.isEmpty
+        let empty = meta.pageCount == 1 && drawing.strokes.isEmpty && meta.images.isEmpty && meta.texts.isEmpty && meta.pdfPages.isEmpty
         let at = empty ? 0 : currentPage + 1
         let order = Array(0..<at) + Array(repeating: -1, count: pdf.numberOfPages) + Array(at..<(empty ? 0 : meta.pageCount))
         var newMeta = meta.rearranged(order)
@@ -108,11 +105,12 @@ enum CanvasMode {
     }
 
     /// Replaces the ink inside `loop` with a text box of the recognized handwriting, in the same spot and color.
-    /// Returns false when there is no ink inside or nothing was recognized.
+    /// Returns false when there is no ink inside, nothing was recognized, or the drawing changed during recognition.
     func convertHandwriting(in loop: CGPath) async -> Bool {
+        let original = drawing
         let inside = drawing.strokes.map { loop.contains(CGPoint(x: $0.renderBounds.midX, y: $0.renderBounds.midY)) }
         let strokes = zip(drawing.strokes, inside).filter(\.1).map(\.0)
-        guard let first = strokes.first, let lines = await Handwriting.recognize(PKDrawing(strokes: strokes)) else { return false }
+        guard let first = strokes.first, let lines = await Handwriting.recognize(PKDrawing(strokes: strokes)), drawing == original else { return false }
         let bounds = PKDrawing(strokes: strokes).bounds
         let lineHeight = bounds.height / CGFloat(lines.count)
         let size = [TextSize.small, .medium, .large].min { abs($0.points - lineHeight * 0.75) < abs($1.points - lineHeight * 0.75) } ?? .medium

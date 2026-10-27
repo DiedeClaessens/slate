@@ -25,7 +25,7 @@ enum Page {
 
     static func height(of count: Int) -> CGFloat { CGFloat(count) * stride - gap }
 
-    static func index(of stroke: PKStroke) -> Int { Int(stroke.renderBounds.midY / stride) }
+    static func index(at y: CGFloat) -> Int { Int(y / stride) }
 
     static func gridPath(width: CGFloat, height: CGFloat, spacing: CGFloat) -> CGPath {
         let path = CGMutablePath()
@@ -55,29 +55,29 @@ enum Page {
     /// Draws page `page` with its top-left corner at the origin, at `scale` points per note point, like the screen shows it.
     /// The ink is a bitmap with `pixels` pixels per point. With `jpeg` set, opaque images are drawn as JPEG, which keeps PDFs small.
     static func draw(page: Int, of drawing: PKDrawing, meta: NoteMeta, note: URL, scale: CGFloat, pixels: CGFloat = 2, jpeg: Bool = false, in context: CGContext) {
-        let page = rect(page), index = Int(page.minY / stride)
+        let bounds = rect(page)
         context.saveGState()
         context.scaleBy(x: scale, y: scale)
-        context.translateBy(x: 0, y: -page.minY)
-        context.clip(to: page)
+        context.translateBy(x: 0, y: -bounds.minY)
+        context.clip(to: bounds)
         meta.background.pageColor.setFill()
-        context.fill(page)
+        context.fill(bounds)
         if meta.background == .grid {
             context.saveGState()
-            context.translateBy(x: 0, y: page.minY)
+            context.translateBy(x: 0, y: bounds.minY)
             context.addPath(gridPath(width: size.width, height: size.height, spacing: gridSpacing))
             context.setStrokeColor(gridColor.cgColor)
             context.setLineWidth(0.5 / scale)
             context.strokePath()
             context.restoreGState()
         }
-        if let ref = meta.pdfPages.first(where: { $0.page == index }),
+        if let ref = meta.pdfPages.first(where: { $0.page == page }),
            let pdf = CGPDFDocument(NoteFile.file(ref.file, in: note) as CFURL)?.page(at: ref.index + 1) {
             UIColor.white.setFill()
-            context.fill(page)
-            draw(pdf, in: page, context: context)
+            context.fill(bounds)
+            draw(pdf, in: bounds, context: context)
         }
-        for item in meta.images where item.frame.intersects(page) {
+        for item in meta.images where item.frame.intersects(bounds) {
             guard var image = UIImage(contentsOfFile: NoteFile.file(item.file, in: note).path) else { continue }
             if jpeg, image.cgImage?.isOpaque == true, let data = image.jpegData(compressionQuality: 0.85), let compressed = UIImage(data: data) {
                 image = compressed
@@ -85,13 +85,13 @@ enum Page {
             image.draw(in: item.frame)
         }
         // Only the area with ink becomes a bitmap, which keeps exported PDFs small.
-        let ink = PKDrawing(strokes: drawing.strokes.filter { $0.renderBounds.intersects(page) }).bounds.intersection(page)
+        let ink = PKDrawing(strokes: drawing.strokes.filter { $0.renderBounds.intersects(bounds) }).bounds.intersection(bounds)
         if !ink.isEmpty {
             UITraitCollection(userInterfaceStyle: meta.background.style).performAsCurrent {
                 drawing.image(from: ink, scale: scale * pixels).draw(in: ink)
             }
         }
-        for item in meta.texts where item.frame.intersects(page) {
+        for item in meta.texts where item.frame.intersects(bounds) {
             NSAttributedString(string: item.text, attributes: item.attributes(dark: meta.background == .black))
                 .draw(with: item.frame, options: .usesLineFragmentOrigin, context: nil)
         }
@@ -121,7 +121,7 @@ extension PKDrawing {
     /// Returns a drawing whose page `n` holds the ink of old page `order[n]`.
     /// Leaving a page out deletes it and listing it twice duplicates it.
     func rearranged(_ order: [Int]) -> PKDrawing {
-        let byPage = Dictionary(grouping: strokes) { Page.index(of: $0) }
+        let byPage = Dictionary(grouping: strokes) { Page.index(at: $0.renderBounds.midY) }
         var result: [PKStroke] = []
         for (new, old) in order.enumerated() {
             let shift = CGAffineTransform(translationX: 0, y: CGFloat(new - old) * Page.stride)

@@ -6,7 +6,7 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 
 - Native Swift app (SwiftUI, PencilKit, PDFKit) for iPadOS 27.
 - Installed from Xcode with a free Apple ID. The app must be reinstalled every 7 days. Notes survive a reinstall.
-- Notes are saved automatically on the iPad, in the app's folder in the Files app. There is no iCloud sync.
+- Notes are saved automatically on the iPad, in the app's folder in the Files app, a second after the last change and straight away when you leave the note or the app. A failed save shows an alert. There is no iCloud sync.
 
 ## Home screen
 

@@ -52,7 +52,7 @@ struct PDFPageRef: Codable, Equatable {
 struct ImageItem: Codable, Equatable {
     var file: String
     var frame: CGRect
-    var page: Int { Int(frame.midY / Page.stride) }
+    var page: Int { Page.index(at: frame.midY) }
 }
 
 enum TextSize: String, Codable {
@@ -87,7 +87,7 @@ struct TextItem: Codable, Equatable {
 
     static let margin: CGFloat = 40
 
-    var page: Int { Int(frame.midY / Page.stride) }
+    var page: Int { Page.index(at: frame.midY) }
 
     func attributes(dark: Bool) -> [NSAttributedString.Key: Any] {
         let light = UIColor(red: color[0], green: color[1], blue: color[2], alpha: color[3])
@@ -200,7 +200,7 @@ struct NoteItem: Identifiable, Hashable {
     func rename(_ note: NoteItem, to title: String) throws {
         var meta = try NoteFile.meta(at: note.url)
         meta.title = title
-        try NoteFile.save(meta, drawing: NoteFile.drawing(at: note.url), to: note.url)
+        try JSONEncoder().encode(meta).write(to: note.url.appending(path: "note.json"), options: .atomic)
         reload()
     }
 
