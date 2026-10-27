@@ -383,3 +383,20 @@ private func pixel(of image: CGImage, at point: CGPoint) -> [UInt8] {
     #expect(reopened.meta.pageCount == 2)
     #expect(heights(reopened.drawing) == [100, 1546])
 }
+
+@Test func movingAPageWhileAnEmptyTextBoxIsOpenKeepsTheOtherText() throws {
+    let window = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.keyWindow)
+    let model = NoteModel(url: try emptyLibrary().createNote(background: .grid, in: nil))
+    model.addPage()
+    model.meta.texts = [TextItem(text: "Keep me", origin: CGPoint(x: 100, y: 100), size: .medium, color: [0, 0, 0, 1])]
+    model.mode = .text
+    let controller = CanvasController(model: model)
+    window.addSubview(controller.view)
+    defer { controller.view.removeFromSuperview() }
+    let objects = try #require(controller.canvas.subviews.compactMap { $0 as? ObjectsView }.first)
+    objects.editText(at: CGPoint(x: 100, y: 1446 + 300), size: .medium, color: .black)
+    controller.focus(false)
+    model.rearrange([1, 0])
+    controller.apply()
+    #expect(model.meta.texts.map(\.text) == ["Keep me"])
+}

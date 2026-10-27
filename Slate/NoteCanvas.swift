@@ -161,9 +161,11 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         }
     }
 
+    /// Losing focus to a sheet ends text editing first, so a page change in the sheet cannot shift the text box being edited.
     func focus(_ focused: Bool) {
         guard focused != self.focused else { return }
         self.focused = focused
+        if !focused { view.endEditing(true) }
         _ = focused ? canvas.becomeFirstResponder() : canvas.resignFirstResponder()
     }
 
