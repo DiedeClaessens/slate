@@ -335,14 +335,15 @@ final class ObjectsView: UIView, UITextViewDelegate {
             }
             selected = added ? .image(meta.images.count - 1) : nil
         }
-        if meta.texts != texts || dark != (meta.background == .black) {
+        let darkChanged = dark != (meta.background == .black)
+        dark = meta.background == .black
+        if meta.texts != texts {
             texts = meta.texts
-            dark = meta.background == .black
             textViews.forEach { $0.removeFromSuperview() }
             textViews = texts.map { _ in makeTextView() }
             textViews.indices.forEach { style($0, text: true) }
             if case .text = selected { selected = nil }
-        } else if zoomed {
+        } else if zoomed || darkChanged {
             textViews.indices.forEach { style($0, text: false) }
         }
         if mode != .draw { selected = nil }

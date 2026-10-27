@@ -87,7 +87,8 @@ struct TextItem: Codable, Equatable {
 
     static let margin: CGFloat = 40
 
-    var page: Int { Page.index(at: frame.midY) }
+    /// The page the box starts on. Its bottom can grow past the page.
+    var page: Int { Page.index(at: origin.y) }
 
     func attributes(dark: Bool) -> [NSAttributedString.Key: Any] {
         let light = UIColor(red: color[0], green: color[1], blue: color[2], alpha: color[3])
@@ -220,18 +221,28 @@ struct NoteItem: Identifiable, Hashable {
         reload()
     }
 
+    /// A folder name must stay one visible folder in the library, so no slash, no leading dot and no note extension.
+    private func newFolder(_ name: String) throws -> URL {
+        guard !name.isEmpty, !name.contains("/"), !name.hasPrefix("."), URL(filePath: name).pathExtension != NoteFile.ext else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+        return root.appending(path: name)
+    }
+
     func createFolder(_ name: String) throws {
-        try FileManager.default.createDirectory(at: directory(name), withIntermediateDirectories: false)
+        try FileManager.default.createDirectory(at: newFolder(name), withIntermediateDirectories: false)
         reload()
     }
 
     func renameFolder(_ name: String, to newName: String) throws {
-        try FileManager.default.moveItem(at: directory(name), to: directory(newName))
+        try FileManager.default.moveItem(at: directory(name), to: newFolder(newName))
         reload()
     }
 
     /// Moves the folder's notes to the top level before removing it, so no note is lost.
+    /// It looks again first, because notes can be added in the Files app.
     func deleteFolder(_ name: String) throws {
+        reload()
         for note in notes where note.folder == name {
             try FileManager.default.moveItem(at: note.url, to: root.appending(path: note.url.lastPathComponent))
         }

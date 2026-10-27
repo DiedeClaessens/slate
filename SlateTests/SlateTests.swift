@@ -44,9 +44,37 @@ private func emptyLibrary() throws -> Library {
     try library.move(library.notes[0], to: "School")
     #expect(library.notes.map { "\($0.folder ?? "-") \($0.title)" } == ["School Maths"])
 
+    _ = try Library(root: library.root).createNote(background: .grid, in: "School")
+
     try library.deleteFolder("School")
     #expect(library.folders == [])
-    #expect(library.notes.map { "\($0.folder ?? "-") \($0.title)" } == ["- Maths"])
+    #expect(library.notes.map(\.folder) == [nil, nil])
+    #expect(library.notes.map(\.title).contains("Maths"))
+}
+
+@Test func aFolderNameCannotLeaveTheLibrary() throws {
+    let library = try emptyLibrary()
+    try library.createFolder("Work")
+    _ = try library.createNote(background: .grid, in: "Work")
+    #expect(throws: CocoaError.self) { try library.renameFolder("Work", to: "School/Work") }
+    #expect(throws: CocoaError.self) { try library.createFolder(".hidden") }
+    #expect(library.folders == ["Work"])
+    #expect(library.notes.map(\.folder) == ["Work"])
+}
+
+@Test func openingANoteWithoutChangingItKeepsItsPlace() throws {
+    let library = try emptyLibrary()
+    let old = try library.createNote(background: .grid, in: nil)
+    let new = try library.createNote(background: .grid, in: nil)
+    NoteModel(url: old).save()
+    library.reload()
+    #expect(library.notes.map(\.url.lastPathComponent) == [new.lastPathComponent, old.lastPathComponent])
+}
+
+@Test func aTextBoxThatGrowsPastItsPageMovesWithThatPage() {
+    var meta = NoteMeta(title: "", background: .grid, pageCount: 1)
+    meta.texts = [TextItem(text: Array(repeating: "line", count: 10).joined(separator: "\n"), origin: CGPoint(x: 50, y: 1320), size: .large, color: [0, 0, 0, 1])]
+    #expect(meta.rearranged([0, 0]).texts.map(\.origin.y) == [1320, 1320 + 1446])
 }
 
 @Test func duplicatingANoteCopiesItsInk() throws {

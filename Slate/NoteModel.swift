@@ -13,7 +13,7 @@ enum CanvasMode {
 
 @Observable final class NoteModel {
     let url: URL
-    var meta: NoteMeta { didSet { saveSoon() } }
+    var meta: NoteMeta { didSet { if meta != oldValue { saveSoon() } } }
     var mode = CanvasMode.draw
     var textSize = TextSize.medium
     /// Shown to the user as an alert.
@@ -46,8 +46,11 @@ enum CanvasMode {
         }
     }
 
+    /// Only writes when something changed, so opening a note to read it keeps its place on the home screen.
     func save() {
-        saveTask?.cancel()
+        guard let saveTask else { return }
+        saveTask.cancel()
+        self.saveTask = nil
         do {
             try NoteFile.save(meta, drawing: drawing, to: url)
         } catch {
