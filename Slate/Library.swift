@@ -242,8 +242,13 @@ struct NoteItem: Identifiable, Hashable {
     }
 
     /// Moves everything in the folder to the top level before removing it, so no note or file is lost.
+    /// When a name is already taken at the top level, it moves nothing.
     func deleteFolder(_ name: String) throws {
-        for item in try FileManager.default.contentsOfDirectory(at: directory(name), includingPropertiesForKeys: nil) {
+        let items = try FileManager.default.contentsOfDirectory(at: directory(name), includingPropertiesForKeys: nil)
+        if items.contains(where: { FileManager.default.fileExists(atPath: root.appending(path: $0.lastPathComponent).path) }) {
+            throw CocoaError(.fileWriteFileExists)
+        }
+        for item in items {
             try FileManager.default.moveItem(at: item, to: root.appending(path: item.lastPathComponent))
         }
         try FileManager.default.removeItem(at: directory(name))

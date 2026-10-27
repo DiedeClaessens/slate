@@ -14,7 +14,7 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 - Folders, one level deep. Search matches note titles.
 - A new note is named after its date ("25 Oct 2026"). Tap the title to rename it.
 - Long-press a note to rename, move to a folder, duplicate or delete it.
-- Long-press a folder to rename it or delete it. Deleting a folder moves everything in it, notes and other files, to the top level first.
+- Long-press a folder to rename it or delete it. Deleting a folder moves everything in it, notes and other files, to the top level first. When a name in it is already taken at the top level, nothing moves and the reason shows.
 - A folder or note action that fails, such as a folder name with a slash or one that already exists, shows the reason.
 
 ## Notes and pages

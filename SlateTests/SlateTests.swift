@@ -54,6 +54,19 @@ private func emptyLibrary() throws -> Library {
     #expect(try String(contentsOf: library.root.appending(path: "scan.pdf"), encoding: .utf8) == "scan")
 }
 
+@Test func deletingAFolderWhoseFileNameIsTakenMovesNothing() throws {
+    let library = try emptyLibrary()
+    try library.createFolder("School")
+    _ = try library.createNote(background: .grid, in: "School")
+    try Data("old".utf8).write(to: library.root.appending(path: "scan.pdf"))
+    try Data("new".utf8).write(to: library.root.appending(path: "School/scan.pdf"))
+
+    #expect(throws: CocoaError.self) { try library.deleteFolder("School") }
+    #expect(library.folders == ["School"])
+    #expect(library.notes.map(\.folder) == ["School"])
+    #expect(try String(contentsOf: library.root.appending(path: "School/scan.pdf"), encoding: .utf8) == "new")
+}
+
 @Test func aFolderNameCannotLeaveTheLibrary() throws {
     let library = try emptyLibrary()
     try library.createFolder("Work")
