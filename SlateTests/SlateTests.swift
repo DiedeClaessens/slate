@@ -62,8 +62,9 @@ private func emptyLibrary() throws -> Library {
     try Data("new".utf8).write(to: library.root.appending(path: "School/scan.pdf"))
 
     #expect(throws: CocoaError.self) { try library.deleteFolder("School") }
-    #expect(library.folders == ["School"])
-    #expect(library.notes.map(\.folder) == ["School"])
+    let reopened = Library(root: library.root)
+    #expect(reopened.folders == ["School"])
+    #expect(reopened.notes.map(\.folder) == ["School"])
     #expect(try String(contentsOf: library.root.appending(path: "School/scan.pdf"), encoding: .utf8) == "new")
 }
 
