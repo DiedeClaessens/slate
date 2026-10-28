@@ -22,6 +22,8 @@ With a free Apple ID the app stops opening after 7 days. Press Run again to rein
 
 `scripts/reinstall-ipad.sh` rebuilds Slate and reinstalls it on the iPad, so the 7-day signature never runs out. When Slate's signing profile has less than two days left, the script removes it so Xcode fetches a new one. A launch agent runs the script every day at 13:00, or when the Mac wakes up if it was asleep then. It needs the Mac logged in, and the iPad on the cable or on the same Wi-Fi. For Wi-Fi, connect the iPad by cable once and tick "Connect via network" for it in Xcode under Window > Devices and Simulators. The log is in `~/Library/Logs/slate-reinstall.log`.
 
+The script reads the iPad's identifier from `scripts/ipad-id`, which git ignores. Find the identifier with `xcrun devicectl list devices` and save it in that file.
+
 Turn it on:
 
 ```sh
