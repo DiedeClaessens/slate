@@ -4,7 +4,12 @@
 
 A personal iPad app for handwriting with the Apple Pencil on pages, PDFs and images. See [docs/design.md](docs/design.md) for what it does and the build order.
 
+> [!WARNING]
+> Slate is a personal project I put together for fun, because I wanted a notes app that works exactly the way I like. It is not on the App Store and never will be. Nobody supports it, and an update can change how notes are stored, so I don't recommend trusting it with notes you can't lose. Read the code or borrow ideas from it if you like.
+
 ## Run it on your iPad
+
+You need a Mac with Xcode 27 and an iPad on iPadOS 27 or later.
 
 1. Connect the iPad with a cable and open `Slate.xcodeproj` in Xcode.
 2. On the iPad, turn on Settings > Privacy & Security > Developer Mode (it appears after the first connection) and restart.
