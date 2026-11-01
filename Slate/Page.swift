@@ -52,26 +52,30 @@ enum Page {
         context.restoreGState()
     }
 
-    /// Draws page `page` with its top-left corner at the origin, at `scale` points per note point, like the screen shows it.
+    /// The parts of the note that export as pages: its A4 pages, or everything on a whiteboard as one page.
+    static func rects(of drawing: PKDrawing, meta: NoteMeta) -> [CGRect] {
+        meta.whiteboard ? [Board.rect(of: drawing, meta: meta)] : (0..<meta.pageCount).map(rect)
+    }
+
+    /// Draws the part `bounds` of the note with its top-left corner at the origin, at `scale` points per note point, like the screen shows it.
     /// The ink is a bitmap with `pixels` pixels per point. With `jpeg` set, opaque images are drawn as JPEG, which keeps PDFs small.
-    static func draw(page: Int, of drawing: PKDrawing, meta: NoteMeta, note: URL, scale: CGFloat, pixels: CGFloat = 2, jpeg: Bool = false, in context: CGContext) {
-        let bounds = rect(page)
+    static func draw(_ bounds: CGRect, of drawing: PKDrawing, meta: NoteMeta, note: URL, scale: CGFloat, pixels: CGFloat = 2, jpeg: Bool = false, in context: CGContext) {
         context.saveGState()
         context.scaleBy(x: scale, y: scale)
-        context.translateBy(x: 0, y: -bounds.minY)
+        context.translateBy(x: -bounds.minX, y: -bounds.minY)
         context.clip(to: bounds)
         meta.background.pageColor.setFill()
         context.fill(bounds)
         if meta.background == .grid {
             context.saveGState()
-            context.translateBy(x: 0, y: bounds.minY)
-            context.addPath(gridPath(width: size.width, height: size.height, spacing: gridSpacing))
+            context.translateBy(x: bounds.minX, y: bounds.minY)
+            context.addPath(gridPath(width: bounds.width, height: bounds.height, spacing: gridSpacing))
             context.setStrokeColor(gridColor.cgColor)
             context.setLineWidth(0.5 / scale)
             context.strokePath()
             context.restoreGState()
         }
-        if let ref = meta.pdfPages.first(where: { $0.page == page }),
+        if let ref = meta.pdfPages.first(where: { rect($0.page) == bounds }),
            let pdf = CGPDFDocument(NoteFile.file(ref.file, in: note) as CFURL)?.page(at: ref.index + 1) {
             UIColor.white.setFill()
             context.fill(bounds)
@@ -85,35 +89,56 @@ enum Page {
             image.draw(in: item.frame)
         }
         // Only the area with ink becomes a bitmap, which keeps exported PDFs small.
+        // A large whiteboard gets coarser ink, so the bitmap stays under about 50 million pixels.
         let ink = PKDrawing(strokes: drawing.strokes.filter { $0.renderBounds.intersects(bounds) }).bounds.intersection(bounds)
         if !ink.isEmpty {
+            let resolution = min(scale * pixels, (50_000_000 / (ink.width * ink.height)).squareRoot())
             UITraitCollection(userInterfaceStyle: meta.background.style).performAsCurrent {
-                drawing.image(from: ink, scale: scale * pixels).draw(in: ink)
+                drawing.image(from: ink, scale: resolution).draw(in: ink)
             }
         }
-        for item in meta.texts where item.frame.intersects(bounds) {
+        for item in meta.texts {
+            let frame = item.frame(whiteboard: meta.whiteboard)
+            guard frame.intersects(bounds) else { continue }
             NSAttributedString(string: item.text, attributes: item.attributes(dark: meta.background == .black))
-                .draw(with: item.frame, options: .usesLineFragmentOrigin, context: nil)
+                .draw(with: frame, options: .usesLineFragmentOrigin, context: nil)
         }
         context.restoreGState()
     }
 
-    static func image(of drawing: PKDrawing, page: Int, meta: NoteMeta, note: URL, width: CGFloat) -> UIImage {
-        let scale = width / size.width
-        return UIGraphicsImageRenderer(size: CGSize(width: width, height: size.height * scale)).image { context in
-            draw(page: page, of: drawing, meta: meta, note: note, scale: scale, in: context.cgContext)
+    static func image(of drawing: PKDrawing, in bounds: CGRect, meta: NoteMeta, note: URL, scale: CGFloat) -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: bounds.width * scale, height: bounds.height * scale)).image { context in
+            draw(bounds, of: drawing, meta: meta, note: note, scale: scale, in: context.cgContext)
         }
     }
 
-    /// The whole note as A4 PDF pages. The ink is about 290 dpi.
+    /// The whole note as A4 PDF pages, or a whiteboard as one page of the same scale. The ink is about 290 dpi.
     static func pdf(of drawing: PKDrawing, meta: NoteMeta, note: URL) -> Data {
         let a4 = CGRect(x: 0, y: 0, width: 595.28, height: 841.89)
+        let scale = a4.width / size.width
         return UIGraphicsPDFRenderer(bounds: a4).pdfData { context in
-            for page in 0..<meta.pageCount {
-                context.beginPage()
-                draw(page: page, of: drawing, meta: meta, note: note, scale: a4.width / size.width, pixels: 4, jpeg: true, in: context.cgContext)
+            for bounds in rects(of: drawing, meta: meta) {
+                context.beginPage(withBounds: meta.whiteboard ? CGRect(x: 0, y: 0, width: bounds.width * scale, height: bounds.height * scale) : a4, pageInfo: [:])
+                draw(bounds, of: drawing, meta: meta, note: note, scale: scale, pixels: 4, jpeg: true, in: context.cgContext)
             }
         }
+    }
+}
+
+/// A whiteboard has no pages. It is so large that you never reach its edge, and a new one opens in the middle.
+enum Board {
+    static let size = CGSize(width: 100_000, height: 100_000)
+    static let start = CGPoint(x: 50_000, y: 50_000)
+
+    /// Everything on the board with a margin, on grid lines so an export's grid matches the screen. An empty board gives an empty A4 page.
+    static func rect(of drawing: PKDrawing, meta: NoteMeta) -> CGRect {
+        let content = ([drawing.bounds] + meta.images.map(\.frame) + meta.texts.map { $0.frame(whiteboard: true) })
+            .filter { !$0.isEmpty }
+            .reduce(CGRect.null) { $0.union($1) }
+        let area = content.isNull ? CGRect(origin: start, size: Page.size) : content.insetBy(dx: -40, dy: -40)
+        let step = Page.gridSpacing
+        let x = floor(area.minX / step) * step, y = floor(area.minY / step) * step
+        return CGRect(x: x, y: y, width: ceil((area.maxX - x) / step) * step, height: ceil((area.maxY - y) / step) * step)
     }
 }
 

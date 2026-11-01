@@ -94,7 +94,7 @@ enum CanvasMode {
         scrollTarget = at
     }
 
-    /// Places the image in the middle of the current page, at most 600 points wide or high.
+    /// Places the image in the middle of the current page, or of the screen on a whiteboard, at most 600 points wide or high.
     func insertImage(_ data: Data) throws {
         guard let image = UIImage(data: data) else { throw CocoaError(.fileReadCorruptFile) }
         let pixels = min(1, 2048 / max(image.size.width, image.size.height))
@@ -107,9 +107,11 @@ enum CanvasMode {
         let file = try NoteFile.store(heic, ext: "heic", in: url)
         let fit = min(1, 600 / size.width, 600 / size.height)
         let width = size.width * fit, height = size.height * fit
-        let page = Page.rect(currentPage)
-        let y = min(max(visibleCenter.y - height / 2, page.minY), page.maxY - height)
-        meta.images.append(ImageItem(file: file, frame: CGRect(x: page.midX - width / 2, y: y, width: width, height: height)))
+        let area = meta.whiteboard
+            ? CGRect(x: visibleCenter.x - width / 2, y: visibleCenter.y - height / 2, width: width, height: height)
+            : Page.rect(currentPage)
+        let y = min(max(visibleCenter.y - height / 2, area.minY), area.maxY - height)
+        meta.images.append(ImageItem(file: file, frame: CGRect(x: area.midX - width / 2, y: y, width: width, height: height)))
     }
 
     /// Replaces the ink inside `loop` with a text box of the recognized handwriting, in the same spot and color.
@@ -145,10 +147,12 @@ enum CanvasMode {
     }
 
     /// Writes the page you are looking at as a PNG of 2480 pixels wide, A4 at 300 dpi.
+    /// A whiteboard is written whole at the same scale, at most 8192 pixels wide or high.
     func exportPNG() throws -> URL {
-        let image = Page.image(of: drawing, page: currentPage, meta: meta, note: url, width: 1240)
+        let bounds = meta.whiteboard ? Board.rect(of: drawing, meta: meta) : Page.rect(currentPage)
+        let image = Page.image(of: drawing, in: bounds, meta: meta, note: url, scale: min(1240 / Page.size.width, 4096 / max(bounds.width, bounds.height)))
         guard let png = image.pngData() else { throw CocoaError(.fileWriteUnknown) }
-        return try export(png, as: "\(meta.title) page \(currentPage + 1).png")
+        return try export(png, as: meta.whiteboard ? "\(meta.title).png" : "\(meta.title) page \(currentPage + 1).png")
     }
 
     private func export(_ data: Data, as name: String) throws -> URL {

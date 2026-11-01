@@ -261,8 +261,55 @@ private func stroke(through points: [CGPoint]) -> PKStroke {
 @Test func aTextBoxNearTheRightEdgeWrapsInsideThePage() {
     let short = TextItem(text: "one", origin: CGPoint(x: 700, y: 0), size: .medium, color: [0, 0, 0, 1])
     let long = TextItem(text: "one two three four five", origin: CGPoint(x: 700, y: 0), size: .medium, color: [0, 0, 0, 1])
-    #expect(long.frame.maxX <= 960)
-    #expect(long.frame.height >= short.frame.height * 2)
+    #expect(long.frame(whiteboard: false).maxX <= 960)
+    #expect(long.frame(whiteboard: false).height >= short.frame(whiteboard: false).height * 2)
+}
+
+@Test func aTextBoxOnAWhiteboardWrapsAtAPageWidthWhereverItIs() {
+    let text = Array(repeating: "word", count: 60).joined(separator: " ")
+    let frame = TextItem(text: text, origin: CGPoint(x: 60_000, y: 60_000), size: .medium, color: [0, 0, 0, 1]).frame(whiteboard: true)
+    #expect(frame.width <= 920)
+    #expect(frame.width >= 800)
+    #expect(frame.height >= 36 * 3)
+}
+
+@Test func anImageOnAWhiteboardGoesInTheMiddleOfTheScreen() throws {
+    let model = NoteModel(url: try emptyLibrary().createNote(background: .grid, whiteboard: true, in: nil))
+    model.visibleCenter = CGPoint(x: 60_000, y: 70_000)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let photo = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 800), format: format).image { _ in }
+    try model.insertImage(try #require(photo.pngData()))
+    #expect(model.meta.images.map(\.frame) == [CGRect(x: 59_700, y: 69_800, width: 600, height: 400)])
+}
+
+@Test func exportingAWhiteboardGivesOnePDFPageAroundEverythingOnIt() throws {
+    let library = try emptyLibrary()
+    let url = try library.createNote(background: .black, whiteboard: true, in: nil)
+    let drawing = PKDrawing(strokes: [stroke(through: [CGPoint(x: 60_000, y: 60_000), CGPoint(x: 62_000, y: 60_000)]), stroke(through: [CGPoint(x: 60_000, y: 61_000), CGPoint(x: 60_100, y: 61_000)])])
+    try NoteFile.save(NoteFile.meta(at: url), drawing: drawing, to: url)
+    let pdf = try #require(CGPDFDocument(NoteModel(url: url).exportPDF() as CFURL))
+
+    #expect(pdf.numberOfPages == 1)
+    let size = try #require(pdf.page(at: 1)?.getBoxRect(.mediaBox).size)
+    #expect((1_200...1_260).contains(size.width))
+    #expect((600...660).contains(size.height))
+}
+
+@Test func aWhiteboardOpensWhereItsInkIs() throws {
+    let window = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.keyWindow)
+    let url = try emptyLibrary().createNote(background: .grid, whiteboard: true, in: nil)
+    try NoteFile.save(NoteFile.meta(at: url), drawing: PKDrawing(strokes: [stroke(through: [CGPoint(x: 70_000, y: 30_000), CGPoint(x: 70_200, y: 30_000)])]), to: url)
+    let controller = CanvasController(model: NoteModel(url: url))
+    controller.view.frame = window.bounds
+    window.addSubview(controller.view)
+    defer { controller.view.removeFromSuperview() }
+    controller.view.layoutIfNeeded()
+
+    let canvas = controller.canvas
+    let visible = CGRect(x: canvas.bounds.minX / canvas.zoomScale, y: canvas.bounds.minY / canvas.zoomScale, width: canvas.bounds.width / canvas.zoomScale, height: canvas.bounds.height / canvas.zoomScale)
+    #expect(visible.contains(CGPoint(x: 70_100, y: 30_000)))
+    #expect(canvas.minimumZoomScale * 4 == canvas.bounds.width / 1000)
 }
 
 @Test func exportingANoteGivesOneA4PDFPagePerPage() throws {

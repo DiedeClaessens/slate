@@ -40,13 +40,17 @@ struct NoteScreen: View {
                         model.meta.background = model.meta.background == .black ? .grid : .black
                     }
                     Button("Insert photo", systemImage: "photo") { showPhotos = true }
-                    Button("Insert PDF or image", systemImage: "doc.richtext") { showFiles = true }
-                    Button("Pages", systemImage: "square.grid.2x2") { showPages = true }
-                    Button("Add page", systemImage: "doc.badge.plus") { model.addPage() }
+                    if model.meta.whiteboard {
+                        Button("Insert image", systemImage: "doc.richtext") { showFiles = true }
+                    } else {
+                        Button("Insert PDF or image", systemImage: "doc.richtext") { showFiles = true }
+                        Button("Pages", systemImage: "square.grid.2x2") { showPages = true }
+                        Button("Add page", systemImage: "doc.badge.plus") { model.addPage() }
+                    }
                     Button("Export", systemImage: "square.and.arrow.up") { showExport = true }
                         .confirmationDialog("Export", isPresented: $showExport) {
                             Button("Whole note as PDF") { share(model.exportPDF) }
-                            Button("This page as PNG") { share(model.exportPNG) }
+                            Button(model.meta.whiteboard ? "Whole note as PNG" : "This page as PNG") { share(model.exportPNG) }
                         }
                 }
             }
@@ -64,7 +68,7 @@ struct NoteScreen: View {
                     }
                 }
             }
-            .fileImporter(isPresented: $showFiles, allowedContentTypes: [.pdf, .image]) { result in
+            .fileImporter(isPresented: $showFiles, allowedContentTypes: model.meta.whiteboard ? [.image] : [.pdf, .image]) { result in
                 do {
                     let url = try result.get()
                     let access = url.startAccessingSecurityScopedResource()
@@ -128,7 +132,7 @@ struct PageOverview: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 24)], spacing: 24) {
                     ForEach(0..<count, id: \.self) { page in
                         VStack {
-                            Image(uiImage: Page.image(of: model.drawing, page: page, meta: model.meta, note: model.url, width: 160))
+                            Image(uiImage: Page.image(of: model.drawing, in: Page.rect(page), meta: model.meta, note: model.url, scale: 160 / Page.size.width))
                                 .clipShape(.rect(cornerRadius: 6))
                                 .shadow(radius: 2)
                             Text("\(page + 1)").font(.caption).foregroundStyle(.secondary)

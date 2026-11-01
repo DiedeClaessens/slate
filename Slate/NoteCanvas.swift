@@ -116,19 +116,25 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         view.endEditing(true)
     }
 
+    /// A whiteboard zooms out to four page widths and opens at the top-left of what is on it.
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let fit = canvas.bounds.width / Page.size.width
-        guard fit > 0, fit != canvas.minimumZoomScale else { return }
-        canvas.minimumZoomScale = fit
+        let minimum = model.meta.whiteboard ? fit / 4 : fit
+        guard fit > 0, minimum != canvas.minimumZoomScale else { return }
+        canvas.minimumZoomScale = minimum
         canvas.maximumZoomScale = fit * 4
         canvas.zoomScale = fit
         layoutPages()
+        if model.meta.whiteboard {
+            let start = Board.rect(of: model.drawing, meta: model.meta).origin
+            canvas.contentOffset = CGPoint(x: start.x * fit, y: start.y * fit - canvas.adjustedContentInset.top)
+        }
     }
 
     func apply() {
         let background = model.meta.background
-        view.backgroundColor = background.gapColor
+        view.backgroundColor = model.meta.whiteboard ? background.pageColor : background.gapColor
         canvas.overrideUserInterfaceStyle = background.style
         toolPicker.colorUserInterfaceStyle = background.style
         if drawingVersion != model.drawingVersion {
@@ -171,8 +177,12 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
 
     private func layoutPages() {
         let zoom = canvas.zoomScale
-        canvas.contentSize = CGSize(width: Page.size.width * zoom, height: Page.height(of: model.meta.pageCount) * zoom)
-        pages.layout(count: model.meta.pageCount, background: model.meta.background, zoom: zoom)
+        canvas.contentSize = CGSize(width: model.meta.size.width * zoom, height: model.meta.size.height * zoom)
+        if model.meta.whiteboard {
+            pages.layoutGrid(visible: canvas.bounds, shown: model.meta.background == .grid, zoom: zoom)
+        } else {
+            pages.layout(count: model.meta.pageCount, background: model.meta.background, zoom: zoom)
+        }
         objects.update(meta: model.meta, note: model.url, zoom: zoom, mode: mode ?? .draw)
         canvas.bringSubviewToFront(objects.textLayer)
     }
@@ -230,6 +240,9 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let zoom = canvas.zoomScale
         model.visibleCenter = CGPoint(x: canvas.bounds.midX / zoom, y: canvas.bounds.midY / zoom)
+        if model.meta.whiteboard {
+            pages.layoutGrid(visible: canvas.bounds, shown: model.meta.background == .grid, zoom: zoom)
+        }
     }
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) { model.drawingChanged(canvasView.drawing) }
@@ -237,6 +250,8 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
 
 /// The page backgrounds under the ink. Redrawn at each zoom level so the grid stays sharp.
 final class PagesView: UIView {
+    private let grid = CAShapeLayer()
+
     func layout(count: Int, background: Background, zoom: CGFloat) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -260,6 +275,20 @@ final class PagesView: UIView {
             lines?.strokeColor = Page.gridColor.cgColor
             lines?.lineWidth = 0.5
         }
+        CATransaction.commit()
+    }
+
+    /// A whiteboard has no pages. Its grid only covers `visible` and is redrawn as you scroll.
+    func layoutGrid(visible: CGRect, shown: Bool, zoom: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if grid.superlayer == nil { layer.addSublayer(grid) }
+        grid.isHidden = !shown
+        let step = Page.gridSpacing * zoom
+        grid.frame = CGRect(x: floor(visible.minX / step) * step, y: floor(visible.minY / step) * step, width: visible.width + step, height: visible.height + step)
+        grid.path = Page.gridPath(width: grid.frame.width, height: grid.frame.height, spacing: step)
+        grid.strokeColor = Page.gridColor.cgColor
+        grid.lineWidth = 0.5
         CATransaction.commit()
     }
 }
@@ -294,6 +323,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
     private var selected: Selection? { didSet { layoutSelection() } }
     private var zoom: CGFloat = 1
     private var dark = false
+    private var whiteboard = false
     private var resizing = false
 
     var editing: Bool { textViews.contains(where: \.isFirstResponder) }
@@ -310,7 +340,8 @@ final class ObjectsView: UIView, UITextViewDelegate {
     func update(meta: NoteMeta, note: URL, zoom: CGFloat, mode: CanvasMode) {
         let zoomed = self.zoom != zoom
         self.zoom = zoom
-        bounds = CGRect(x: 0, y: 0, width: Page.size.width, height: Page.height(of: meta.pageCount))
+        whiteboard = meta.whiteboard
+        bounds = CGRect(origin: .zero, size: meta.size)
         layer.position = .zero
         transform = CGAffineTransform(scaleX: zoom, y: zoom)
         textLayer.frame = CGRect(x: 0, y: 0, width: bounds.width * zoom, height: bounds.height * zoom)
@@ -367,8 +398,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
     /// Zoomed text is not exactly as wide as the measured box, so the view gets one character of room and measures its own height.
     private func place(_ index: Int) {
         let item = texts[index], view = textViews[index]
-        let available = (Page.size.width - TextItem.margin - item.origin.x) * zoom
-        let width = min((item.frame.width + item.size.points) * zoom, max(available, item.size.points * zoom))
+        let width = min(item.frame(whiteboard: whiteboard).width + item.size.points, item.available(whiteboard: whiteboard)) * zoom
         let height = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
         view.frame = CGRect(x: item.origin.x * zoom, y: item.origin.y * zoom, width: width, height: height)
     }
@@ -387,7 +417,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
             }
         } else if case .text(let index) = selected, texts[index].handwriting != nil, selection.revertFrame.contains(convert(point, to: selection)) {
             revertRequested?(index)
-        } else if let index = texts.lastIndex(where: { $0.frame.contains(point) }) {
+        } else if let index = texts.lastIndex(where: { $0.frame(whiteboard: whiteboard).contains(point) }) {
             selected = .text(index)
         } else {
             selected = images?.lastIndex { $0.frame.contains(point) }.map { .image($0) }
@@ -395,17 +425,17 @@ final class ObjectsView: UIView, UITextViewDelegate {
     }
 
     func takesTap(at point: CGPoint) -> Bool {
-        selected != nil || texts.contains { $0.frame.contains(point) } || images?.contains { $0.frame.contains(point) } == true
+        selected != nil || texts.contains { $0.frame(whiteboard: whiteboard).contains(point) } || images?.contains { $0.frame.contains(point) } == true
     }
 
     /// Edits the text box at `point`, or places a new one there.
     func editText(at point: CGPoint, size: TextSize, color: UIColor) {
-        if let index = texts.lastIndex(where: { $0.frame.contains(point) }) {
+        if let index = texts.lastIndex(where: { $0.frame(whiteboard: whiteboard).contains(point) }) {
             textViews[index].becomeFirstResponder()
             return
         }
-        let page = Page.rect(Page.index(at: point.y))
-        let x = min(max(point.x, TextItem.margin), Page.size.width - TextItem.margin - size.points)
+        let page = whiteboard ? bounds : Page.rect(Page.index(at: point.y))
+        let x = min(max(point.x, page.minX + TextItem.margin), page.maxX - TextItem.margin - size.points)
         let y = min(max(point.y - size.points * 0.6, page.minY), page.maxY - size.points * 1.2)
         texts.append(TextItem(text: "", origin: CGPoint(x: x, y: y), size: size, color: color.components))
         textViews.append(makeTextView())
@@ -458,7 +488,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
     private func frame(of selection: Selection) -> CGRect? {
         switch selection {
         case .image(let index): images?[index].frame
-        case .text(let index): texts[index].frame
+        case .text(let index): texts[index].frame(whiteboard: whiteboard)
         }
     }
 
@@ -489,7 +519,7 @@ final class ObjectsView: UIView, UITextViewDelegate {
         case .text(let index):
             texts[index].origin.x += delta.x
             texts[index].origin.y += delta.y
-            if done { texts[index].origin = inside(texts[index].frame) }
+            if done { texts[index].origin = inside(texts[index].frame(whiteboard: whiteboard)) }
             style(index, text: false)
             if done { textsChanged?(texts) }
         case nil:

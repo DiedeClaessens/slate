@@ -10,10 +10,15 @@ struct NoteMeta: Codable, Equatable {
     /// Later images are drawn on top.
     var images: [ImageItem] = []
     var texts: [TextItem] = []
+    /// One large board instead of pages. Set when the note is created. See `Board`.
+    var whiteboard = false
+
+    /// The whole note in note coordinates, like the ink.
+    var size: CGSize { whiteboard ? Board.size : CGSize(width: Page.size.width, height: Page.height(of: pageCount)) }
 }
 
 extension NoteMeta {
-    /// Notes saved before PDFs, images and text existed have no `pdfPages`, `images` or `texts`.
+    /// Notes saved before PDFs, images, text and whiteboards existed have no `pdfPages`, `images`, `texts` or `whiteboard`.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decode(String.self, forKey: .title)
@@ -22,6 +27,7 @@ extension NoteMeta {
         pdfPages = try container.decodeIfPresent([PDFPageRef].self, forKey: .pdfPages) ?? []
         images = try container.decodeIfPresent([ImageItem].self, forKey: .images) ?? []
         texts = try container.decodeIfPresent([TextItem].self, forKey: .texts) ?? []
+        whiteboard = try container.decodeIfPresent(Bool.self, forKey: .whiteboard) ?? false
     }
 
     /// See `PKDrawing.rearranged(_:)`. An index of -1 adds a blank page.
@@ -76,6 +82,7 @@ enum TextSize: String, Codable {
 }
 
 /// A typed text box in note coordinates. It grows with the text up to the page's right margin, then the text wraps.
+/// On a whiteboard it wraps at a page width minus both margins.
 struct TextItem: Codable, Equatable {
     var text: String
     var origin: CGPoint
@@ -95,8 +102,13 @@ struct TextItem: Codable, Equatable {
         return [.font: UIFont.systemFont(ofSize: size.points), .foregroundColor: dark ? PKInkingTool.convertColor(light, from: .light, to: .dark) : light]
     }
 
-    var frame: CGRect {
-        let available = max(Page.size.width - Self.margin - origin.x, size.points)
+    /// How wide the box may grow before the text wraps.
+    func available(whiteboard: Bool) -> CGFloat {
+        whiteboard ? Page.size.width - 2 * Self.margin : max(Page.size.width - Self.margin - origin.x, size.points)
+    }
+
+    func frame(whiteboard: Bool) -> CGRect {
+        let available = available(whiteboard: whiteboard)
         // A trailing newline starts a line that would otherwise not be measured.
         let measured = text.isEmpty || text.hasSuffix("\n") ? text + " " : text
         let box = NSAttributedString(string: measured, attributes: attributes(dark: false))
@@ -138,7 +150,8 @@ enum NoteFile {
         for (name, _) in parts where rename(url.appending(path: "\(name).new").path, url.appending(path: name).path) != 0 {
             throw CocoaError(.fileWriteUnknown)
         }
-        let image = Page.image(of: drawing, page: 0, meta: meta, note: url, width: 200)
+        let first = Page.rects(of: drawing, meta: meta)[0]
+        let image = Page.image(of: drawing, in: first, meta: meta, note: url, scale: min(200 / first.width, 283 / first.height))
         try image.pngData()?.write(to: thumbnail(at: url), options: .atomic)
         let used = Set(meta.pdfPages.map(\.file) + meta.images.map(\.file))
         let files = (try? FileManager.default.contentsOfDirectory(atPath: url.appending(path: "files").path)) ?? []
@@ -197,11 +210,11 @@ struct NoteItem: Identifiable, Hashable {
         directory.appending(path: "\(UUID().uuidString).\(NoteFile.ext)")
     }
 
-    func createNote(background: Background, in folder: String?) throws -> URL {
+    func createNote(background: Background, whiteboard: Bool = false, in folder: String?) throws -> URL {
         let url = newNoteURL(in: directory(folder))
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         let title = Date.now.formatted(.dateTime.day().month(.abbreviated).year())
-        try NoteFile.save(NoteMeta(title: title, background: background, pageCount: 1), drawing: PKDrawing(), to: url)
+        try NoteFile.save(NoteMeta(title: title, background: background, pageCount: 1, whiteboard: whiteboard), drawing: PKDrawing(), to: url)
         reload()
         return url
     }

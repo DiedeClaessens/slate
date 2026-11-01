@@ -24,6 +24,14 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 - "Add page" adds a page at the end with the note's background.
 - A page overview shows page thumbnails. You can jump to a page, delete it, duplicate it or drag it to reorder.
 
+## Whiteboards
+
+- A new note is either pages or a whiteboard. A whiteboard can't turn into pages, or the other way round.
+- A whiteboard is one board without pages, 100 page widths wide and high, so you don't reach an edge. A new one opens in the middle. Reopening it shows the top-left of what is on it.
+- Pinch zooms out to four page widths across the screen. The background and grid cover the whole board.
+- Text boxes wrap at a page width. Images go in the middle of the screen. PDFs can't be inserted, because a PDF page is a page background.
+- The PDF export is one page around everything on the board, at the same scale as an A4 page. The PNG export is the whole board, at most 8192 pixels wide or high.
+
 ## Input
 
 - Only the Pencil draws. The finger scrolls, zooms and moves objects.
@@ -52,7 +60,7 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 
 ## Export
 
-- The whole note as a PDF, or the current page as a PNG, through the share sheet.
+- The whole note as a PDF, or the current page as a PNG, through the share sheet. Whiteboards export differently, see above.
 - The export looks exactly like the screen: black pages stay black and the grid stays visible.
 - PDF pages are A4. The ink is a bitmap of about 290 dpi, PDF pages stay vector and photos are stored as JPEG. The PNG is 2480 pixels wide, A4 at 300 dpi.
 
@@ -65,4 +73,4 @@ Slate is a personal iPad app for handwriting with the Apple Pencil on pages, PDF
 
 ## Out of scope for now
 
-- Typed text outside text boxes, iCloud sync, Dutch handwriting recognition, a grid size setting, a white "print" export, PDF pages in their own size, inserting from the camera, drawing with a finger, a long-press menu to duplicate or reorder images and text boxes.
+- Typed text outside text boxes, iCloud sync, Dutch handwriting recognition, a grid size setting, a white "print" export, PDF pages in their own size, inserting from the camera, drawing with a finger, PDFs on a whiteboard, switching a note between pages and whiteboard, a long-press menu to duplicate or reorder images and text boxes.

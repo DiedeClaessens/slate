@@ -114,8 +114,14 @@ struct NotesGrid: View {
                 Button("New folder", systemImage: "folder.badge.plus") { ask(.newFolder, "") }
             }
             Menu("New note", systemImage: "square.and.pencil") {
-                Button("Black", systemImage: "square.fill") { newNote(.black) }
-                Button("Grid", systemImage: "squareshape.split.3x3") { newNote(.grid) }
+                Section("Pages") {
+                    Button("Black", systemImage: "square.fill") { newNote(.black, whiteboard: false) }
+                    Button("Grid", systemImage: "squareshape.split.3x3") { newNote(.grid, whiteboard: false) }
+                }
+                Section("Whiteboard") {
+                    Button("Black", systemImage: "square.fill") { newNote(.black, whiteboard: true) }
+                    Button("Grid", systemImage: "squareshape.split.3x3") { newNote(.grid, whiteboard: true) }
+                }
             }
         }
         .alert(prompt?.title ?? "", isPresented: Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })) {
@@ -153,8 +159,8 @@ struct NotesGrid: View {
         do { try action() } catch { library.failure = error.localizedDescription }
     }
 
-    private func newNote(_ background: Background) {
-        attempt { path.append(.note(try library.createNote(background: background, in: folder))) }
+    private func newNote(_ background: Background, whiteboard: Bool) {
+        attempt { path.append(.note(try library.createNote(background: background, whiteboard: whiteboard, in: folder))) }
     }
 }
 
